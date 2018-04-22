@@ -1,0 +1,17 @@
+{
+  "name": "computernetwerken_multiplayer_game",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon ."
+  },
+  "author": "Patrick",
+  "license": "ISC",
+  "dependencies": {
+    "express": "*",
+    "nodemon": "*",
+    "socket.io": "*"
+  }
+}

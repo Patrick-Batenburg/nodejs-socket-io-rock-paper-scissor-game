@@ -1,0 +1,232 @@
+<html>
+    <head>
+        <title>Rock, paper, scissors</title>
+        <link rel="stylesheet" media="screen" href="//netdna.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+        <script src="//code.jquery.com/jquery.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.3/socket.io.js"></script>
+        <style>
+            body {
+                margin-top: 30px;
+            }
+            #gameArea {
+                display: none;
+            }
+            .sectionArea {
+                margin-bottom: 30px;
+            }
+            .chat {
+                height: 340px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1 class="text-center">Rock, paper, scissors</h1>
+
+            <br />
+
+            <div class="row" id="userFormArea">
+                <div class="col-md-12">
+                    <form id="userForm">
+                        <div class="form-group row">
+                            <label class="col-form-label col-sm-2 " for="username">Username</label>
+                            <div class="col-sm-10">
+                                <input class="form-control" id="username" placeholder="Enter Username" />
+                            </div>
+                        </div>
+                        <br />
+                        <input type="submit" class="btn btn-primary" value="Login" />
+                    </form>
+                </div>
+            </div>
+
+            <div class="row" id="gameArea">
+                <div class="col-md-4">
+                    <div class="well">
+                        <h3>Online Users</h3>
+                        <ul class="list-group" id="users"></ul>
+                    </div>
+                </div>
+                
+                <div class="col-md-8">
+                    <form class="sectionArea" id="game">
+                        <h4>Choices</h4>
+
+                        <input class="form-check-input" id="rock" type="radio" name="choice" value="rock" checked />
+                        <label class="form-check-label" for="rock">Rock</label>
+                        <br />
+
+                        <input class="form-check-input" id="paper" type="radio" name="choice" value="paper" />
+                        <label class="form-check-label" for="paper">Paper</label>
+                        <br />
+
+                        <input class="form-check-input" id="scissors" type="radio" name="choice" value="scissors" />
+                        <label class="form-check-label" for="scissors">Scissors</label>
+                        <br />
+
+                        <input type="submit" class="btn btn-primary" value="Submit" />
+                    </form>
+
+                    <div class="sectionArea">
+                        <h4>Information</h4>
+                        <p id="info" class="text-info">Waiting for players...</p>
+                    </div>
+
+                    <div class="container navbar-fixed-bottom">
+                        <div class="chat pre-scrollable" id="chat"></div>
+                        <form id="messageForm">
+                            <label>Enter Message</label>
+                            <textarea class="form-control" id="message">
+                            </textarea>
+                            <br />
+                            <input type="submit" class="btn btn-primary" value="Send message" />
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            $(function() {
+                var socket = io.connect();
+                var $messageForm = $('#messageForm');
+                var $message = $('#message');
+                var $chat = $('#chat');
+                var $gameArea = $('#gameArea');
+                var $userFormArea = $('#userFormArea');
+                var $userForm = $('#userForm');
+                var $users = $('#users');
+                var $username = $('#username');
+                var $game = $('#game');
+                var $info = $('#info');
+                var submitted = false;
+
+                $messageForm.submit(function(e) {
+                    e.preventDefault();
+                    socket.emit('send message', $message.val());
+                    $message.val('');
+                });
+
+                socket.on('room full', function() {
+                    $('#login').hide();
+                    $('#game').show();
+                    $('#login').off('click');
+                });
+
+                $game.submit(function(e) {
+                    e.preventDefault();
+                    var choice = $('input[name=choice]:checked').val();
+
+                    if(!submitted)
+                    {
+                        submitted = true;
+                        socket.emit('player choice', $username.val(), choice);
+                        $info.html('Waiting for other player...');
+                    }
+                    else $info.html('You have already made a choice!');
+                });
+
+                socket.on('new message', function(data) {
+                    var enableAutoScroll = enableAutoScroll = ($($chat)[0].scrollHeight - $chat.scrollTop()) === $chat.outerHeight();
+                    $chat.append('<div class="well"><strong>' + data.user + '</strong>: ' + data.msg + '</div>');
+
+                    if(enableAutoScroll)
+                    {
+                        $chat.stop().animate({ scrollTop: $chat[0].scrollHeight}, 500);
+                    }
+                });
+
+                $userFormArea.submit(function(e) {
+                    e.preventDefault();
+
+                    socket.emit('add user', $username.val(), function(data) {
+                        if(data) 
+                        {
+                            $userFormArea.hide();
+                            $gameArea.show();
+                            $game.hide();
+                        }
+                        else
+                        {
+                            alert($username.val() + " username is already in use.");
+                        }
+                    });
+
+                    $username.val();
+                });
+
+                socket.on('get user', function(data) {
+                    var html = '';
+
+                    for (i = 0; i < data.length; i++) 
+                    {
+                        html += '<li class="list-group-item">' + data[i] + '</li>';
+                    }
+
+                    $users.html(html);
+                });
+
+                socket.on('disconnected', function (username) {
+                    $info.append('<br />' + username + ' left the room.');
+                });
+
+                socket.on('connected', function (username) {
+                    $info.append('<br />' + username + ' joined the room.');
+                });
+
+                socket.on('game start', function() {
+                    $game.show();
+                    $info.append('<br />Make your choice.');
+                });
+
+                socket.on('tie', function (choices) {
+                    countdown(choices);
+
+                    setTimeout(function() {
+                        $info.append('<br />A tie!');
+                    }, 5000);
+
+                    submitted = false;
+                });
+
+                socket.on('player 1 win', function (choices) {
+                    countdown(choices);
+
+                    setTimeout(function () {
+                        $info.append('<br />' + choices[0]['user'] + ' wins!');
+                    }, 5000);
+
+                    submitted = false;
+                });
+                
+                socket.on('player 2 win', function (choices) {
+                    countdown(choices);
+
+                    setTimeout(function() {
+                        $info.append('<br />' + choices[1]['user'] + ' wins!');
+                    }, 5000);
+
+                    submitted = false;
+                });
+
+                function countdown(choices) {      
+                    setTimeout(function() {
+                        $info.html('3...'); 
+                    }, 0);
+                    setTimeout(function() {
+                        $info.html('2...'); 
+                    }, 1000);
+                    setTimeout(function() {
+                        $info.html('1...'); 
+                    }, 2000);
+                    setTimeout(function() {
+                        $info.html(choices[0]['user'] + ' picked ' + choices[0]['choice'] + '.');
+                    }, 3000);
+                    setTimeout(function() {
+                        $info.append('<br />' + choices[1]['user'] + ' picked ' + choices[1]['choice'] + '.');
+                    }, 4000);
+                }
+            });
+        </script>
+    </body>
+</html>
